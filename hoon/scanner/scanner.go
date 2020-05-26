@@ -3,7 +3,7 @@ package scanner
 import (
 	"strings"
 
-	"lukechampine.com/go-urbit/hoon/token"
+	"lukechampine.com/urbit/hoon/token"
 )
 
 type Scanner struct {

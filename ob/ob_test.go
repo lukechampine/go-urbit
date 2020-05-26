@@ -1,4 +1,4 @@
-package urbit
+package ob
 
 import (
 	"flag"

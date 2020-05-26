@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"lukechampine.com/go-urbit/hoon/ast"
-	"lukechampine.com/go-urbit/hoon/scanner"
+	"lukechampine.com/urbit/hoon/ast"
+	"lukechampine.com/urbit/hoon/scanner"
 )
 
 func TestRoundTrip(t *testing.T) {

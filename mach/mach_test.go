@@ -3,9 +3,9 @@ package mach
 import (
 	"testing"
 
-	"lukechampine.com/go-urbit/hoon/ast"
-	"lukechampine.com/go-urbit/hoon/parser"
-	"lukechampine.com/go-urbit/hoon/scanner"
+	"lukechampine.com/urbit/hoon/ast"
+	"lukechampine.com/urbit/hoon/parser"
+	"lukechampine.com/urbit/hoon/scanner"
 )
 
 func parse(s string) ast.Node {

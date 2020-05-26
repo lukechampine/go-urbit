@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"io"
 
-	"lukechampine.com/go-urbit/hoon/token"
+	"lukechampine.com/urbit/hoon/token"
 )
 
 type Node interface {

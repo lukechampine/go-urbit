@@ -4,8 +4,8 @@ import (
 	"reflect"
 	"testing"
 
-	"lukechampine.com/go-urbit/hoon/token"
-	. "lukechampine.com/go-urbit/hoon/token"
+	"lukechampine.com/urbit/hoon/token"
+	. "lukechampine.com/urbit/hoon/token"
 )
 
 func TestScan(t *testing.T) {

@@ -1,4 +1,4 @@
-module lukechampine.com/go-urbit
+module lukechampine.com/urbit
 
 go 1.14
 

@@ -1,8 +1,14 @@
-package urbit
+package ob
 
 import (
+	"crypto/ed25519"
+	"crypto/rand"
+	"crypto/sha256"
 	"encoding/binary"
+	"encoding/hex"
 	"errors"
+	"fmt"
+	"unsafe"
 
 	"github.com/spaolacci/murmur3"
 )
@@ -83,6 +89,43 @@ func PointFromName(n string) (AzimuthPoint, error) {
 	}
 
 	return fynd(binary.BigEndian.Uint32(buf)), nil
+}
+
+type Comet [16]byte
+
+func (c Comet) String() string {
+	parts := make([]interface{}, 8)
+	for i := range parts {
+		parts[7-i] = AzimuthPoint(binary.LittleEndian.Uint16(c[i*2:])).String()[1:]
+	}
+	return fmt.Sprintf("~%v-%v-%v-%v--%v-%v-%v-%v", parts...)
+}
+
+func (c Comet) Parent() AzimuthPoint {
+	return AzimuthPoint(binary.LittleEndian.Uint16(c[:2]))
+}
+
+func FindComet(star AzimuthPoint) (Comet, string) {
+	if !star.IsStar() {
+		panic("not a star")
+	}
+	seed := make([]byte, 32)
+	rand.Read(seed)
+	buf := [65]byte{'b'}
+	for ; ; *(*uint64)(unsafe.Pointer(&seed[0]))++ {
+		sk := ed25519.NewKeyFromSeed(seed)
+		pubsum := sha256.Sum256(append(buf[:1], sk[32:]...))
+		*(*uint32)(unsafe.Pointer(&pubsum)) ^= 0x67696662
+		h := sha256.Sum256(pubsum[:])
+		parent := AzimuthPoint(h[0]^h[16]) | (AzimuthPoint(h[1]^h[17]) << 8)
+		if parent == star {
+			var c Comet
+			for i := range c {
+				c[i] = h[i] ^ h[16+i]
+			}
+			return c, hex.EncodeToString(sk)
+		}
+	}
 }
 
 func prf(j int, u uint16) uint32 {

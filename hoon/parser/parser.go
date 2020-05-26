@@ -3,9 +3,9 @@ package parser
 import (
 	"fmt"
 
-	"lukechampine.com/go-urbit/hoon/ast"
-	"lukechampine.com/go-urbit/hoon/scanner"
-	"lukechampine.com/go-urbit/hoon/token"
+	"lukechampine.com/urbit/hoon/ast"
+	"lukechampine.com/urbit/hoon/scanner"
+	"lukechampine.com/urbit/hoon/token"
 )
 
 // TODO: determine appropriate values for these

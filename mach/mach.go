@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strconv"
 
-	"lukechampine.com/go-urbit/hoon/ast"
+	"lukechampine.com/urbit/hoon/ast"
 
 	"github.com/llir/llvm/ir"
 	"github.com/llir/llvm/ir/constant"
