@@ -92,7 +92,7 @@ define i32 @main() {
 	ret i32 %1
 }
 
-define private i32 @0(i32 %n, i32 %acc) {
+define private i32 @0(i32 %acc, i32 %n) {
 0:
 	%1 = icmp eq i32 %n, 6
 	br i1 %1, label %2, label %3
@@ -101,8 +101,8 @@ define private i32 @0(i32 %n, i32 %acc) {
 	ret i32 %acc
 
 3:
-	%4 = add i32 %n, 1
-	%5 = mul i32 %acc, %n
+	%4 = mul i32 %acc, %n
+	%5 = add i32 %n, 1
 	%6 = call i32 @0(i32 %4, i32 %5)
 	ret i32 %6
 }
@@ -135,6 +135,37 @@ define private i32 @0(i32 %n) {
 	%4 = sub i32 %n, 1
 	%5 = call i32 @0(i32 %4)
 	%6 = mul i32 %n, %5
+	ret i32 %6
+}
+`[1:],
+		},
+		{
+			hoon: `
+=/  a  5
+=/  b  0
+|-
+?:  =(a +(b))  b
+$(b +(b))
+`,
+			llvm: `
+define i32 @main() {
+0:
+	%1 = call i32 @0(i32 5, i32 0)
+	ret i32 %1
+}
+
+define private i32 @0(i32 %a, i32 %b) {
+0:
+	%1 = add i32 %b, 1
+	%2 = icmp eq i32 %a, %1
+	br i1 %2, label %3, label %4
+
+3:
+	ret i32 %b
+
+4:
+	%5 = add i32 %b, 1
+	%6 = call i32 @0(i32 %a, i32 %5)
 	ret i32 %6
 }
 `[1:],

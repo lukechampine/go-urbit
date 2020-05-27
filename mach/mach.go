@@ -2,6 +2,7 @@ package mach
 
 import (
 	"fmt"
+	"sort"
 	"strconv"
 
 	"lukechampine.com/urbit/hoon/ast"
@@ -38,6 +39,15 @@ func (s subject) with(key string, val value.Value) subject {
 	}
 	m2[key] = val
 	return subject{m2}
+}
+
+func (s subject) faces() []string {
+	fs := make([]string, 0, len(s.m))
+	for k := range s.m {
+		fs = append(fs, k)
+	}
+	sort.Strings(fs)
+	return fs
 }
 
 type transpiler struct {
@@ -100,15 +110,16 @@ func (t *transpiler) expr(s subject, fn *ir.Func, b *ir.Block, n ast.Node) value
 			maybeRet(fb, t.expr(s, fn, fb, n.Args[2]))
 			return nil
 		case "|-":
-			// everything in the subject becomes an argument
+			// everything in the subject becomes an argument.
 			var params []*ir.Param
 			var args []value.Value
 			var fs subject
-			for k, v := range s.m {
-				p := ir.NewParam(k, v.Type())
+			for _, face := range s.faces() {
+				v := s.get(face)
+				p := ir.NewParam(face, v.Type())
 				params = append(params, p)
 				args = append(args, v)
-				fs = fs.with(k, p)
+				fs = fs.with(face, p)
 			}
 			fn := t.module.NewFunc("", atomType, params...)
 			fn.Linkage = enum.LinkagePrivate
@@ -135,7 +146,12 @@ func (t *transpiler) expr(s subject, fn *ir.Func, b *ir.Block, n ast.Node) value
 		case "%=":
 			if _, ok := n.Args[0].(ast.Buc); ok {
 				args := make([]value.Value, len(fn.Params))
+
 				for i := range args {
+					// by default, use existing value in subject
+					args[i] = s.get(fn.Params[i].Name())
+
+					// if new value provided in centis, use that instead
 					for j := 1; j < len(n.Args); j += 2 {
 						face := n.Args[j].(ast.Face)
 						if face.Name == fn.Params[i].Name() {
