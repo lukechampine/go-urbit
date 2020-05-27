@@ -1,13 +1,18 @@
 package ob
 
 import (
+	"bytes"
 	"crypto/ed25519"
 	"crypto/rand"
 	"crypto/sha256"
+	"crypto/sha512"
+	"encoding/base64"
 	"encoding/binary"
-	"encoding/hex"
 	"errors"
 	"fmt"
+	"math/bits"
+	"strconv"
+	"strings"
 	"unsafe"
 
 	"github.com/spaolacci/murmur3"
@@ -96,13 +101,13 @@ type Comet [16]byte
 func (c Comet) String() string {
 	parts := make([]interface{}, 8)
 	for i := range parts {
-		parts[7-i] = AzimuthPoint(binary.LittleEndian.Uint16(c[i*2:])).String()[1:]
+		parts[i] = AzimuthPoint(binary.BigEndian.Uint16(c[i*2:])).String()[1:]
 	}
 	return fmt.Sprintf("~%v-%v-%v-%v--%v-%v-%v-%v", parts...)
 }
 
 func (c Comet) Parent() AzimuthPoint {
-	return AzimuthPoint(binary.LittleEndian.Uint16(c[:2]))
+	return AzimuthPoint(binary.BigEndian.Uint16(c[14:]))
 }
 
 func FindComet(star AzimuthPoint) (Comet, string) {
@@ -111,21 +116,96 @@ func FindComet(star AzimuthPoint) (Comet, string) {
 	}
 	seed := make([]byte, 32)
 	rand.Read(seed)
-	buf := [65]byte{'b'}
+	pubbuf, secbuf := [65]byte{'b'}, [65]byte{'B'}
 	for ; ; *(*uint64)(unsafe.Pointer(&seed[0]))++ {
-		sk := ed25519.NewKeyFromSeed(seed)
-		pubsum := sha256.Sum256(append(buf[:1], sk[32:]...))
+		// derive keypair
+		bits := sha512.Sum512(seed)
+		cry := ed25519.NewKeyFromSeed(bits[:32])
+		sgn := ed25519.NewKeyFromSeed(bits[32:])
+		pub := append(append(pubbuf[:1], cry[32:]...), sgn[32:]...)
+		sec := append(append(secbuf[:1], cry[:32]...), sgn[:32]...)
+
+		// fingerprint
+		pubsum := sha256.Sum256(pub)
 		*(*uint32)(unsafe.Pointer(&pubsum)) ^= 0x67696662
 		h := sha256.Sum256(pubsum[:])
-		parent := AzimuthPoint(h[0]^h[16]) | (AzimuthPoint(h[1]^h[17]) << 8)
-		if parent == star {
-			var c Comet
-			for i := range c {
-				c[i] = h[i] ^ h[16+i]
-			}
-			return c, hex.EncodeToString(sk)
+		var c Comet
+		for i := range c {
+			c[15-i] = h[i] ^ h[16+i]
+		}
+
+		if c.Parent() == star {
+			return c, formatUW(jamComet(c, sec))
 		}
 	}
+}
+
+func jamComet(who Comet, key []byte) []byte {
+	// This code is truly shameful.
+	// Please do not look at it.
+
+	mat := func(a []byte) string {
+		var buf bytes.Buffer
+		for _, b := range a {
+			fmt.Fprintf(&buf, "%08b", b)
+		}
+		s := strings.TrimLeft(buf.String(), "0")
+		switch s {
+		case "":
+			return "10"
+		case "1":
+			return "1100"
+		default:
+			met := bits.Len16(uint16(len(s))) - 1
+			return s + fmt.Sprintf("%0[1]*b%08b", met, len(s)%(1<<met), 4<<met)
+		}
+	}
+	jam := func(elems ...[]byte) string {
+		var sb strings.Builder
+		sb.WriteString(mat(elems[0]))
+		for i := 1; i < len(elems); i++ {
+			sb.WriteString(mat(elems[i]))
+			sb.WriteString("01")
+		}
+		return sb.String()
+	}
+
+	// flip key endianness
+	for i := 0; i < len(key)/2; i++ {
+		j := len(key) - i - 1
+		key[i], key[j] = key[j], key[i]
+	}
+
+	// jam to binary, pad to byte-boundary, decode to bytes
+	bits := jam(nil, key, []byte{1}, who[:])
+	for len(bits)%8 != 0 {
+		bits = "0" + bits
+	}
+	dec := make([]byte, len(bits)/8)
+	for i := range dec {
+		b, _ := strconv.ParseUint(bits[i*8:][:8], 2, 8)
+		dec[i] = byte(b)
+	}
+	return dec
+}
+
+func formatUW(b []byte) string {
+	for len(b)%3 != 0 {
+		b = append([]byte{0}, b...)
+	}
+	b64 := base64.NewEncoding("0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ-~").EncodeToString(b)
+	b64 = strings.TrimLeft(b64, "0")
+	i := len(b64) % 5
+	if i == 0 {
+		i = 5
+	}
+	var buf bytes.Buffer
+	buf.WriteString(b64[:i])
+	for ; i < len(b64); i += 5 {
+		buf.WriteByte('.')
+		buf.WriteString(b64[i:][:5])
+	}
+	return "0w" + buf.String()
 }
 
 func prf(j int, u uint16) uint32 {

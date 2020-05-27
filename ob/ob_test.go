@@ -1,9 +1,26 @@
 package ob
 
 import (
+	"encoding/hex"
 	"flag"
 	"testing"
 )
+
+func TestComet(t *testing.T) {
+	var c Comet
+	hex.Decode(c[:], []byte("1fe49fba73b5725bdb99f904e7acf465"))
+	if c.String() != "~mirryc-patpex-saldef-padhep--nactyr-sovsev-mosber-bonwet" {
+		t.Fatal("bad comet name:", c.String())
+	} else if c.Parent().String() != "~bonwet" {
+		t.Fatal("wrong comet parent:", c.Parent().String())
+	}
+
+	sk, _ := hex.DecodeString("4230e39bc7a387ec3b9f4f08d68c0ea0093e0bb4ef1f5c618494ae6c7fb4f4e2c2604f698a5e28a63996eb6886d04816188d538864883083d98fa549be5e5bfc55")
+	jam := formatUW(jamComet(c, sk))
+	if jam != "0w2.G~ySL.nOjiN.-P1C4.gOh2D.6z0IA.q4cQt.sIsQN.gLhji.DI65N.uBE~J.Btagz.2K3~v.q1pY4.Q0t6q.MgDPV.TSgZ7.zPv6o.8g7w0.svYA~.tetGV.buTc~.89PRD.EO-M1" {
+		t.Fatal("bad jam for comet")
+	}
+}
 
 func TestPoints(t *testing.T) {
 	nec := AzimuthPoint(1)
