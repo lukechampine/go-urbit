@@ -61,8 +61,17 @@ func TestRoundTrip(t *testing.T) {
                    ==`,
 			exp: `|=(n=@ =/(acc=@ 1 |-(?:(.=(n 0) acc %=($ n (dec n), acc (mul acc n))))))`,
 		},
+		{
+			prog: `=/  x  58
+                   |%
+                   ++  n  (add 42 x)
+                   ++  g  |=  b=@
+                          (add b n)
+                   --`,
+			exp: `=/(x 58 |%(++(n (add 42 x)) ++(g |=(b=@ (add b n)))))`,
+		},
 	}
-	for _, test := range tests {
+	for _, test := range tests[len(tests)-1:] {
 		var sb strings.Builder
 		ast.Print(&sb, New(scanner.New([]byte(test.prog))).Parse())
 		if got := sb.String(); got != test.exp {

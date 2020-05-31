@@ -11,14 +11,15 @@ type Node interface {
 	isNode()
 }
 
-func (Buc) isNode()        {}
-func (Pat) isNode()        {}
-func (Dot) isNode()        {}
-func (Face) isNode()       {}
-func (FacedValue) isNode() {}
-func (Num) isNode()        {}
-func (Rune) isNode()       {}
-func (Cell) isNode()       {}
+func (Buc) isNode()  {}
+func (Pat) isNode()  {}
+func (Dot) isNode()  {}
+func (Face) isNode() {}
+func (Slot) isNode() {}
+func (Tis) isNode()  {}
+func (Num) isNode()  {}
+func (Rune) isNode() {}
+func (Cell) isNode() {}
 
 type Buc struct {
 	Tok token.Token
@@ -28,6 +29,7 @@ type Pat struct {
 	Tok token.Token
 }
 
+// TODO: replace with wing?
 type Dot struct {
 	Tok token.Token
 }
@@ -37,10 +39,15 @@ type Face struct {
 	Name string
 }
 
-type FacedValue struct {
+type Slot struct {
+	Tok     token.Token
+	Address string
+}
+
+type Tis struct {
 	Tok   token.Token
-	Face  Face
-	Value Node
+	Left  Node
+	Right Node
 }
 
 type Num struct {
@@ -58,6 +65,195 @@ type Cell struct {
 	Tok  token.Token
 	Head Node
 	Tail Node
+}
+
+func (r Rune) Reduce() Rune {
+	switch r.Lit {
+	// these are the only "real" runes; every other rune reduces to one of these
+	case "=~", "%=", "?:":
+		return r
+
+	// these runes are just flipped versions of other runes
+	case "=<", "%.":
+		return Rune{
+			Lit: map[string]string{
+				"=<": "=>",
+				"=-": "=+",
+				"%.": "%-",
+				"?.": "?:",
+			}[r.Lit],
+			Args: []Node{
+				r.Args[1],
+				r.Args[0],
+			},
+		}.Reduce()
+
+	// tis
+	case "=>":
+		return Rune{
+			Lit:  "=~",
+			Args: r.Args,
+		}.Reduce()
+	case "=+":
+		return Rune{
+			Lit: "=>",
+			Args: []Node{
+				Cell{
+					Head: r.Args[0],
+					Tail: Dot{},
+				},
+				r.Args[1],
+			},
+		}.Reduce()
+	case "=.", "=:":
+		return Rune{
+			Lit: "=>",
+			Args: []Node{
+				Rune{
+					Lit: "%_",
+					Args: append([]Node{
+						Dot{},
+					}, r.Args[:len(r.Args)-1]...),
+				},
+				r.Args[len(r.Args)-1],
+			},
+		}.Reduce()
+	case "=|":
+		return Rune{
+			Lit: "=+",
+			Args: []Node{
+				Rune{
+					Lit:  "^*",
+					Args: []Node{r.Args[0]},
+				},
+				r.Args[1],
+			},
+		}.Reduce()
+	case "=/":
+		return Rune{
+			Lit: "=+",
+			Args: []Node{
+				Tis{
+					Left:  r.Args[0],
+					Right: r.Args[1],
+				},
+				r.Args[2],
+			},
+		}.Reduce()
+	case "=;":
+		return Rune{
+			Lit: "=/",
+			Args: []Node{
+				r.Args[0],
+				r.Args[2],
+				r.Args[1],
+			},
+		}.Reduce()
+	case "=?":
+		return Rune{
+			Lit: "=.",
+			Args: []Node{
+				r.Args[0],
+				Rune{
+					Lit: "?:",
+					Args: []Node{
+						r.Args[1],
+						r.Args[2],
+						r.Args[0],
+					},
+				},
+				r.Args[3],
+			},
+		}.Reduce()
+
+	// bar
+	case "|.":
+		return Rune{
+			Lit: "|%",
+			Args: []Node{
+				Buc{},
+				r.Args[0],
+			},
+		}.Reduce()
+	case "|_":
+		return Rune{
+			Lit: "=|",
+			Args: []Node{
+				r.Args[0],
+				Rune{
+					Lit:  "|%",
+					Args: r.Args[1:],
+				},
+			},
+		}.Reduce()
+	case "|=":
+		return Rune{
+			Lit: "=|",
+			Args: []Node{
+				r.Args[0],
+				Rune{
+					Lit:  "|.",
+					Args: []Node{r.Args[1]},
+				},
+			},
+		}.Reduce()
+	case "|^", "|-":
+		return Rune{
+			Lit: "=>",
+			Args: []Node{
+				Rune{
+					Lit: "|%",
+					Args: append([]Node{
+						Buc{},
+						r.Args[0],
+					}, r.Args[1:]...),
+				},
+				Buc{},
+			},
+		}.Reduce()
+
+	// cen
+	case "%_":
+		return Rune{
+			Lit: "^+",
+			Args: []Node{
+				r.Args[0],
+				Rune{
+					Lit:  "%=",
+					Args: r.Args[1:],
+				},
+			},
+		}.Reduce()
+	case "%~":
+		return Rune{
+			Lit: "=+",
+			Args: []Node{
+				r.Args[1],
+				Rune{
+					Lit: "=>",
+					Args: []Node{
+						Rune{
+							Lit: "%=",
+							Args: []Node{
+								Slot{Address: "2"},
+								Slot{Address: "6"},
+								r.Args[2],
+							},
+						},
+						r.Args[0],
+					},
+				},
+			},
+		}.Reduce()
+	case "%-":
+		return Rune{
+			Lit:  "%~",
+			Args: []Node{Buc{}, r.Args[0], r.Args[1]},
+		}.Reduce()
+
+	default:
+		panic("unhandled reduction " + r.Lit)
+	}
 }
 
 func Print(w io.Writer, n Node) (err error) {
@@ -80,10 +276,10 @@ func Print(w io.Writer, n Node) (err error) {
 		writeString(".")
 	case Face:
 		writeString(n.Name)
-	case FacedValue:
-		writeNode(n.Face)
+	case Tis:
+		writeNode(n.Left)
 		writeString("=")
-		writeNode(n.Value)
+		writeNode(n.Right)
 	case Num:
 		writeString(n.Int)
 	case Rune:

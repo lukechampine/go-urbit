@@ -16,18 +16,129 @@ var precedences = map[token.Token]int{
 
 type runeEntry struct {
 	args    int
-	core    bool // must be terminated by --
-	jogging bool // must be terminated by ==
+	jogging bool
+	post    int // some runes have fixed args *after* the jog
 }
 
+// TODO: probably numerous errors here
 var runeTab = map[string]runeEntry{
-	"|=": {args: 2},
-	"=/": {args: 3},
-	"=.": {args: 3},
-	"|-": {args: 1},
-	"?:": {args: 3},
-	"%=": {args: 3, jogging: true}, // must change at least one wing
+	".^": {args: 2},
+	".+": {args: 1},
+	".*": {args: 2},
 	".=": {args: 2},
+	".?": {args: 1},
+	"!>": {args: 1},
+	"!<": {args: 2},
+	"!:": {args: 1},
+	"!.": {args: 1},
+	"!=": {args: 1},
+	"!?": {args: 2},
+	"=+": {args: 2},
+	"=-": {args: 2},
+	"=|": {args: 2},
+	"=/": {args: 3},
+	"=;": {args: 2},
+	"=.": {args: 3},
+	"=:": {jogging: true, post: 2},
+	"=?": {args: 4},
+	"=*": {args: 3},
+	"=>": {args: 2},
+	"=<": {args: 2},
+	"=~": {args: 2},
+	"=,": {args: 2},
+	"=^": {args: 4},
+	"?>": {args: 2},
+	"?<": {args: 2},
+	"?|": {args: 1, jogging: true},
+	"?&": {args: 1, jogging: true},
+	"?!": {args: 1},
+	"?=": {args: 2},
+	"?:": {args: 3},
+	"?.": {args: 3},
+	"?@": {args: 3},
+	"?^": {args: 3},
+	"?~": {args: 3},
+	"?-": {args: 1, jogging: true},
+	"?+": {args: 1, jogging: true},
+	"|_": {args: 3, jogging: true},
+	"|%": {args: 2, jogging: true},
+	"|:": {args: 2},
+	"|.": {args: 1},
+	"|-": {args: 1},
+	"|?": {args: 1},
+	"|^": {args: 2, jogging: true},
+	"|~": {args: 2},
+	"|=": {args: 2},
+	"|*": {args: 2},
+	"|@": {args: 2},
+	"++": {args: 2},
+	"+$": {args: 2},
+	"+*": {args: 2},
+	"+|": {args: 1},
+	":-": {args: 2},
+	":_": {args: 2},
+	":+": {args: 3},
+	":^": {args: 4},
+	":*": {args: 1, jogging: true},
+	":~": {args: 1, jogging: true},
+	"::": {args: 1},
+	"%~": {args: 3, jogging: true},
+	"%-": {args: 2},
+	"%.": {args: 2},
+	"%+": {args: 3},
+	"%^": {args: 4},
+	"%:": {args: 2, jogging: true},
+	"%=": {args: 3, jogging: true},
+	"%_": {args: 2, jogging: true},
+	"%*": {args: 3, jogging: true},
+	"^|": {args: 1},
+	"^&": {args: 1},
+	"^?": {args: 1},
+	"^:": {args: 1},
+	"^.": {args: 2},
+	"^-": {args: 2},
+	"^+": {args: 2},
+	"^~": {args: 1},
+	"^*": {args: 1},
+	"^=": {args: 2},
+	"$_": {args: 1},
+	"$%": {args: 1, jogging: true},
+	"$:": {args: 1, jogging: true},
+	"$?": {args: 1, jogging: true},
+	"$<": {args: 2},
+	"$>": {args: 2},
+	"$-": {args: 2},
+	"$@": {args: 2},
+	"$^": {args: 2},
+	"$~": {args: 2},
+	"$=": {args: 2},
+	";:": {args: 2, jogging: true},
+	";+": {args: 1},
+	";/": {args: 1},
+	";*": {args: 1},
+	";=": {args: 1, jogging: true},
+	";;": {args: 2},
+	";~": {args: 2},
+	"~>": {args: 2},
+	"~|": {args: 2},
+	"~_": {args: 2},
+	"~$": {args: 2},
+	"~%": {args: 3, jogging: true},
+	"~<": {args: 2},
+	"~+": {args: 1},
+	"~/": {args: 2},
+	"~&": {args: 2},
+	"~?": {args: 3},
+	"~!": {args: 2},
+}
+
+func hasArms(r string) bool {
+	switch r {
+	case "|%", "|^": // TODO
+		return true
+	default:
+		return false
+	}
 }
 
 type Parser struct {
@@ -121,10 +232,10 @@ func (p *Parser) parseBinaryExpr(prec int) ast.Node {
 				Args: []ast.Node{n, next},
 			}
 		case token.Tis:
-			n = ast.FacedValue{
+			n = ast.Tis{
 				Tok:   op,
-				Face:  n.(ast.Face),
-				Value: next,
+				Left:  n,
+				Right: next,
 			}
 		default:
 			panic("unhandled binop")
@@ -224,8 +335,9 @@ func (p *Parser) parseRune(tok token.Token, lit string) ast.Node {
 			n.Args[i] = p.parseExpr()
 		}
 	}
-	if e.core {
+	if hasArms(lit) {
 		n.Args = append(n.Args, p.consumeTall(token.HepHep)...)
+		fmt.Println(n.Args)
 	} else if e.jogging {
 		n.Args = append(n.Args, p.consumeTall(token.TisTis)...)
 	}
