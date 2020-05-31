@@ -14,10 +14,12 @@ func parse(s string) ast.Node {
 
 func Test(t *testing.T) {
 	var tests = []struct {
+		desc string
 		hoon string
 		llvm string
 	}{
 		{
+			desc: "atom literal",
 			hoon: `1`,
 			llvm: `
 define i32 @main() {
@@ -27,6 +29,7 @@ define i32 @main() {
 `[1:],
 		},
 		{
+			desc: "resolve face in subject",
 			hoon: `
 =/  n  1
 n
@@ -39,6 +42,7 @@ define i32 @main() {
 `[1:],
 		},
 		{
+			desc: "add two faces",
 			hoon: `
 =/  a  2
 =/  b  a
@@ -53,6 +57,7 @@ define i32 @main() {
 `[1:],
 		},
 		{
+			desc: "change subject, simple conditional",
 			hoon: `
 =/  a  2
 =/  b  7
@@ -77,6 +82,7 @@ define i32 @main() {
 `[1:],
 		},
 		{
+			desc: "barhep recursion",
 			hoon: `
 =/  n    1
 =/  acc  1
@@ -109,6 +115,7 @@ define private i32 @0(i32 %acc, i32 %n) {
 `[1:],
 		},
 		{
+			desc: "non-tail-recursive barhep",
 			hoon: `
 =/  n  5
 |-
@@ -140,6 +147,7 @@ define private i32 @0(i32 %n) {
 `[1:],
 		},
 		{
+			desc: "recurse without modifying entire subject",
 			hoon: `
 =/  a  5
 =/  b  0
@@ -167,6 +175,37 @@ define private i32 @0(i32 %a, i32 %b) {
 	%5 = add i32 %b, 1
 	%6 = call i32 @0(i32 %a, i32 %5)
 	ret i32 %6
+}
+`[1:],
+		},
+		{
+			desc: "assign gate to face",
+			hoon: `
+=/  f
+  |=  a=@
+  =/  g
+    |=  b=@
+    (dec b)
+  (g a)
+(f 5)
+`,
+			llvm: `
+define i32 @main() {
+0:
+	%1 = call i32 @0(i32 5)
+	ret i32 %1
+}
+
+define private i32 @0(i32 %a) {
+0:
+	%1 = call i32 @1(i32 %a, i32 %a)
+	ret i32 %1
+}
+
+define private i32 @1(i32 %a, i32 %b) {
+0:
+	%1 = sub i32 %b, 1
+	ret i32 %1
 }
 `[1:],
 		},

@@ -52,6 +52,7 @@ func (s subject) faces() []string {
 
 type transpiler struct {
 	module *ir.Module
+	id     int64
 }
 
 func newTranspiler() *transpiler {
@@ -71,7 +72,36 @@ func (t *transpiler) Finish() string {
 	return t.module.String()
 }
 
+func (t *transpiler) uid() int64 {
+	id := t.id
+	t.id++
+	return id
+}
+
+func sampleParams(n ast.Node) []*ir.Param {
+	switch n := n.(type) {
+	case ast.Tis:
+		sampleName := n.Left.(ast.Face).Name
+		var sampleType types.Type
+		switch n.Right.(type) {
+		case ast.Pat:
+			sampleType = atomType
+		default:
+			panic("unhandled sample type")
+		}
+		return []*ir.Param{ir.NewParam(sampleName, sampleType)}
+	case ast.Cell:
+		return append(sampleParams(n.Head), sampleParams(n.Tail)...)
+	default:
+		panic("unhandled sample mold")
+	}
+}
+
 func (t *transpiler) expr(s subject, fn *ir.Func, b *ir.Block, n ast.Node) value.Value {
+	eval := func(n ast.Node) value.Value {
+		return t.expr(s, fn, b, n)
+	}
+
 	switch n := n.(type) {
 	case ast.Num:
 		i, _ := strconv.Atoi(n.Int)
@@ -85,24 +115,24 @@ func (t *transpiler) expr(s subject, fn *ir.Func, b *ir.Block, n ast.Node) value
 		case ".=":
 			return b.NewICmp(
 				enum.IPredEQ,
-				t.expr(s, fn, b, n.Args[0]),
-				t.expr(s, fn, b, n.Args[1]),
+				eval(n.Args[0]),
+				eval(n.Args[1]),
 			)
 		case ".+":
 			return b.NewAdd(
-				t.expr(s, fn, b, n.Args[0]),
+				eval(n.Args[0]),
 				constant.NewInt(atomType, 1),
 			)
 		case "=/":
 			face := n.Args[0].(ast.Face)
-			f := t.expr(s, fn, b, n.Args[1])
+			f := eval(n.Args[1])
 			return t.expr(s.with(face.Name, f), fn, b, n.Args[2])
 		case "=.":
 			face := n.Args[0].(ast.Face)
-			s = s.with(face.Name, t.expr(s, fn, b, n.Args[1]))
-			return t.expr(s, fn, b, n.Args[2])
+			s = s.with(face.Name, eval(n.Args[1]))
+			return eval(n.Args[2])
 		case "?:":
-			pred := t.expr(s, fn, b, n.Args[0])
+			pred := eval(n.Args[0])
 			tb := fn.NewBlock("")
 			fb := fn.NewBlock("")
 			b.NewCondBr(pred, tb, fb)
@@ -122,26 +152,85 @@ func (t *transpiler) expr(s subject, fn *ir.Func, b *ir.Block, n ast.Node) value
 				fs = fs.with(face, p)
 			}
 			fn := t.module.NewFunc("", atomType, params...)
+			fn.SetID(t.uid())
 			fn.Linkage = enum.LinkagePrivate
 			fnb := fn.NewBlock("")
 			maybeRet(fnb, t.expr(fs, fn, fnb, n.Args[0]))
 			return b.NewCall(fn, args...)
-		case "%-":
-			gate := n.Args[0].(ast.Face)
-			arg := func(i int) value.Value {
-				return t.expr(s, fn, b, n.Args[i+1])
+		case "|=":
+			// everything in the subject becomes an argument, as well as the gate's arguments
+			var params []*ir.Param
+			var fs subject
+			for _, face := range s.faces() {
+				v := s.get(face)
+				p := ir.NewParam(face, v.Type())
+				params = append(params, p)
+				fs = fs.with(face, p)
 			}
-			switch gate.Name {
-			case "dec":
-				return b.NewSub(arg(0), constant.NewInt(atomType, 1))
-			case "add":
-				return b.NewAdd(arg(0), arg(1))
-			case "sub":
-				return b.NewSub(arg(0), arg(1))
-			case "mul":
-				return b.NewMul(arg(0), arg(1))
+			sample := sampleParams(n.Args[0])
+			params = append(params, sample...)
+			for _, p := range sample {
+				fs = fs.with(p.Name(), p)
+			}
+
+			fn := t.module.NewFunc("", atomType, params...)
+			fn.SetID(t.uid())
+			fn.Linkage = enum.LinkagePrivate
+			fnb := fn.NewBlock("")
+			maybeRet(fnb, t.expr(fs, fn, fnb, n.Args[1]))
+			return fn
+		case "%-":
+			switch gate := n.Args[0].(type) {
+			case ast.Dot:
+				f := fn
+				args := make([]value.Value, len(f.Params)-len(n.Args[1:]), len(f.Params))
+				for i := range args {
+					args[i] = s.get(f.Params[i].Name())
+				}
+				for _, a := range n.Args[1:] {
+					args = append(args, eval(a))
+				}
+				return b.NewCall(f, args...)
+			case ast.Rune:
+				f := eval(n.Args[0]).(*ir.Func)
+				args := make([]value.Value, len(f.Params)-len(n.Args[1:]), len(f.Params))
+				for i := range args {
+					args[i] = s.get(f.Params[i].Name())
+				}
+				for _, a := range n.Args[1:] {
+					args = append(args, eval(a))
+				}
+				return b.NewCall(f, args...)
+			case ast.Face:
+				switch gate.Name {
+				case "dec":
+					return b.NewSub(eval(n.Args[1]), constant.NewInt(atomType, 1))
+				case "add":
+					return b.NewAdd(eval(n.Args[1]), eval(n.Args[2]))
+				case "sub":
+					return b.NewSub(eval(n.Args[1]), eval(n.Args[2]))
+				case "mul":
+					return b.NewMul(eval(n.Args[1]), eval(n.Args[2]))
+				default:
+					v := s.get(gate.Name)
+					if v == nil {
+						panic(fmt.Sprintf("unknown gate %s", gate.Name))
+					}
+					f := v.(*ir.Func)
+					if f == nil {
+						panic(fmt.Sprintf("not a gate: %s", gate.Name))
+					}
+					args := make([]value.Value, len(f.Params)-len(n.Args[1:]), len(f.Params))
+					for i := range args {
+						args[i] = s.get(f.Params[i].Name())
+					}
+					for _, a := range n.Args[1:] {
+						args = append(args, eval(a))
+					}
+					return b.NewCall(f, args...)
+				}
 			default:
-				panic(fmt.Sprintf("unhandled gate %s", gate.Name))
+				panic(fmt.Sprintf("bad gate type %T", gate))
 			}
 		case "%=":
 			if _, ok := n.Args[0].(ast.Buc); ok {
@@ -155,7 +244,7 @@ func (t *transpiler) expr(s subject, fn *ir.Func, b *ir.Block, n ast.Node) value
 					for j := 1; j < len(n.Args); j += 2 {
 						face := n.Args[j].(ast.Face)
 						if face.Name == fn.Params[i].Name() {
-							args[i] = t.expr(s, fn, b, n.Args[j+1])
+							args[i] = eval(n.Args[j+1])
 							break
 						}
 					}

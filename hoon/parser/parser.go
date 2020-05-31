@@ -60,8 +60,8 @@ var runeTab = map[string]runeEntry{
 	"?~": {args: 3},
 	"?-": {args: 1, jogging: true},
 	"?+": {args: 1, jogging: true},
-	"|_": {args: 3, jogging: true},
-	"|%": {args: 2, jogging: true},
+	"|_": {args: 1, jogging: true},
+	"|%": {args: 0, jogging: true}, // cores can be empty
 	"|:": {args: 2},
 	"|.": {args: 1},
 	"|-": {args: 1},
@@ -337,7 +337,6 @@ func (p *Parser) parseRune(tok token.Token, lit string) ast.Node {
 	}
 	if hasArms(lit) {
 		n.Args = append(n.Args, p.consumeTall(token.HepHep)...)
-		fmt.Println(n.Args)
 	} else if e.jogging {
 		n.Args = append(n.Args, p.consumeTall(token.TisTis)...)
 	}
