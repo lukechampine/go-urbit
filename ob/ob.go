@@ -6,7 +6,6 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/sha512"
-	"encoding/base64"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -16,6 +15,7 @@ import (
 	"unsafe"
 
 	"github.com/spaolacci/murmur3"
+	"lukechampine.com/urbit/atom"
 )
 
 type AzimuthPoint uint32
@@ -57,18 +57,7 @@ func (p AzimuthPoint) Parent() AzimuthPoint {
 func (p AzimuthPoint) String() string {
 	buf := make([]byte, 4)
 	binary.BigEndian.PutUint32(buf, fein(p))
-	name := "~"
-	switch {
-	case p.IsPlanet():
-		name += prefixes[buf[0]] + suffixes[buf[1]] + "-"
-		fallthrough
-	case p.IsStar():
-		name += prefixes[buf[2]]
-		fallthrough
-	case p.IsGalaxy():
-		name += suffixes[buf[3]]
-	}
-	return name
+	return atom.FromBytes(buf).Format("p")
 }
 
 func PointFromName(n string) (AzimuthPoint, error) {
@@ -135,7 +124,7 @@ func FindComet(star AzimuthPoint) (Comet, string) {
 		}
 
 		if c.Parent() == star {
-			return c, formatUW(jamComet(c, sec))
+			return c, atom.FromBytes(jamComet(c, sec)).Format("uw")
 		}
 	}
 }
@@ -171,13 +160,13 @@ func jamComet(who Comet, key []byte) []byte {
 	}
 
 	// flip key endianness
-	for i := 0; i < len(key)/2; i++ {
-		j := len(key) - i - 1
-		key[i], key[j] = key[j], key[i]
+	flippedKey := make([]byte, len(key))
+	for i := range flippedKey {
+		flippedKey[i] = key[len(key)-i-1]
 	}
 
 	// jam to binary, pad to byte-boundary, decode to bytes
-	bits := jam(nil, key, []byte{1}, who[:])
+	bits := jam(nil, flippedKey, []byte{1}, who[:])
 	for len(bits)%8 != 0 {
 		bits = "0" + bits
 	}
@@ -187,25 +176,6 @@ func jamComet(who Comet, key []byte) []byte {
 		dec[i] = byte(b)
 	}
 	return dec
-}
-
-func formatUW(b []byte) string {
-	for len(b)%3 != 0 {
-		b = append([]byte{0}, b...)
-	}
-	b64 := base64.NewEncoding("0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ-~").EncodeToString(b)
-	b64 = strings.TrimLeft(b64, "0")
-	i := len(b64) % 5
-	if i == 0 {
-		i = 5
-	}
-	var buf bytes.Buffer
-	buf.WriteString(b64[:i])
-	for ; i < len(b64); i += 5 {
-		buf.WriteByte('.')
-		buf.WriteString(b64[i:][:5])
-	}
-	return "0w" + buf.String()
 }
 
 func prf(j int, u uint16) uint32 {
