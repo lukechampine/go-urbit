@@ -88,6 +88,9 @@ func (a Atom) String() string {
 	case AuraTA:
 		return "~." + string(flip(a.i.Bytes()))
 	case AuraTAS:
+		if a.i.BitLen() == 0 {
+			return "%$"
+		}
 		return "%" + string(flip(a.i.Bytes()))
 	case AuraAtom, AuraU, AuraUD:
 		return formatInt(a.i.Text(10), 3)
@@ -96,6 +99,9 @@ func (a Atom) String() string {
 	case AuraUV:
 		return "0v" + formatInt(a.i.Text(32), 5)
 	case AuraUW:
+		if a.i.BitLen() == 0 {
+			return "0w0"
+		}
 		return "0w" + formatInt(uwEnc.EncodeToString(pad(a.i.Bytes(), 3)), 5)
 	case AuraUX:
 		return "0x" + formatInt(a.i.Text(16), 4)
@@ -149,7 +155,11 @@ func flip(b []byte) []byte {
 }
 
 func formatP(a *big.Int) string {
-	b := a.Bytes()
+	var b []byte
+	b = a.Bytes()
+	if len(b) == 0 {
+		b = []byte{0}
+	}
 	if len(b) > 1 {
 		b = pad(b, 2)
 	}
@@ -265,6 +275,9 @@ func formatDate(a *big.Int) string {
 }
 
 func formatDuration(a *big.Int) string {
+	if a.BitLen() == 0 {
+		return "s0"
+	}
 	secs, rem := new(big.Int).QuoRem(a, oneSec, new(big.Int))
 	mins, secRem := new(big.Int).QuoRem(secs, big.NewInt(60), new(big.Int))
 	hrs, minRem := new(big.Int).QuoRem(mins, big.NewInt(60), new(big.Int))
@@ -295,6 +308,9 @@ func formatDuration(a *big.Int) string {
 }
 
 func formatInt(s string, n int) string {
+	if s == "0" {
+		return "0"
+	}
 	s = strings.TrimLeft(s, "0")
 	if len(s) < n {
 		return s

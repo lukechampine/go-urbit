@@ -11,6 +11,26 @@ func TestFormat(t *testing.T) {
 		exp map[Aura]string
 	}{
 		{
+			dec: "0",
+			exp: map[Aura]string{
+				"dr":  "~s0",
+				"p":   "~zod",
+				"s":   "--0",
+				"sb":  "--0b0",
+				"sv":  "--0v0",
+				"sw":  "--0w0",
+				"sx":  "--0x0",
+				"t":   "''",
+				"ta":  "~.",
+				"tas": "%$",
+				"u":   "0",
+				"ub":  "0b0",
+				"uv":  "0v0",
+				"uw":  "0w0",
+				"ux":  "0x0",
+			},
+		},
+		{
 			dec: "56",
 			exp: map[Aura]string{
 				"dr":  "~s0..0000.0000.0000.0038",
