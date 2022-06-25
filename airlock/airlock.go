@@ -140,7 +140,7 @@ func (c *Client) sendJSONToChannel(v ...interface{}) error {
 	}
 	defer io.Copy(ioutil.Discard, resp.Body)
 	defer resp.Body.Close()
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != 204 {
 		switch resp.StatusCode {
 		case http.StatusBadRequest:
 			return errors.New("invalid request")
@@ -236,7 +236,7 @@ func NewClient(addr, code string) (*Client, error) {
 	}
 	defer io.Copy(ioutil.Discard, resp.Body)
 	defer resp.Body.Close()
-	if resp.StatusCode != 200 {
+	if resp.StatusCode != 204 {
 		return nil, fmt.Errorf("ship returned HTTP status code %v (%v)", resp.StatusCode, http.StatusText(resp.StatusCode))
 	}
 	c.http.Jar, err = cookiejar.New(nil)
